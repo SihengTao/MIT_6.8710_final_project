@@ -1,0 +1,3 @@
+gene	region	bin_size	pearson	n_bins	transform_prediction	transform_gt
+BCL11A	chr2:60005424-61005424	100	0.019896952562675645	10000	stored_as_is	clip0_log1p
+ASXL1	chr20:31898825-32898825	100	0.010928122362730885	10000	stored_as_is	clip0_log1p

@@ -1,0 +1,4 @@
+source_id	path	source_type	used_for	notes
+top_by_target	/broad/boxialab/sihengtao/projects/chromnitron_finetune/20260503_analysis/finetune_prediction_bcl11a_pearson_all/top_by_target.tsv	tsv	confirm ranked candidate context	Existing transfer Pearson summary; not recomputed by this script.
+wide_transfer_metrics	/broad/boxialab/sihengtao/projects/chromnitron_finetune/20260503_analysis/finetune_prediction_bcl11a_pearson_all/all_finetune_prediction_bcl11a_pearson_wide.tsv	tsv	dropout/no-dropout and best no-dropout 100 bp Pearson values	Existing transfer Pearson summary; not recomputed by this script.
+legacy_controls	/broad/boxialab/sihengtao/projects/chromnitron_finetune/20260502_analysis/hic2_to_gata1_transfer_bcl11a_pearson_50_100_200_1000.csv	csv	official/base-only GATA1 100 bp reference controls	Existing control summary; used only as reference baseline.

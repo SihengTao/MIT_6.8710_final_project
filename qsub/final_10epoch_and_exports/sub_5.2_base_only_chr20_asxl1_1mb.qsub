@@ -1,0 +1,91 @@
+#!/bin/bash
+#$ -N five2_base_asxl1
+#$ -cwd
+#$ -l h_vmem=128G
+#$ -l h_rt=72:00:00
+#$ -l gpu=1
+#$ -l os=RedHat8
+#$ -hard
+#$ -t 1-2
+#$ -m ea
+#$ -M stao@broadinstitute.org
+
+set -euo pipefail
+
+PROJECT_DIR="/broad/boxialab/sihengtao/chromnitron/chromnitron_finetune"
+ATLAS_CHROMNITRON_DIR="/broad/boxialab/sihengtao/chromnitron/atlas_tcell_differentiation/chromnitron"
+LOG_DIR="/broad/boxialab/sihengtao/projects/chromnitron_finetune/logs"
+
+CELLTYPE="check4hic2_anewPaper_single_sample"
+REGION="chr20:31898825-32898825"
+GENE="ASXL1"
+TASK_ID="${SGE_TASK_ID:-}"
+
+mkdir -p "${LOG_DIR}"
+JOB_TAG="${JOB_ID:-local}.${TASK_ID:-unset}"
+exec >"${LOG_DIR}/five2_base_asxl1.${JOB_TAG}.log" 2>&1
+
+if [[ ! "${TASK_ID}" =~ ^[0-9]+$ ]] || (( TASK_ID < 1 || TASK_ID > 2 )); then
+  echo "Unsupported SGE_TASK_ID=${TASK_ID:-unset}; expected 1-2" >&2
+  exit 2
+fi
+
+CONFIG_PATHS=(
+  ""
+  "${PROJECT_DIR}/configs/gata1_base_only_chr20_asxl1_1mb/local_config.yaml"
+  "${PROJECT_DIR}/configs/hic2_base_only_chr20_asxl1_1mb/local_config.yaml"
+)
+
+OUTPUT_DIRS=(
+  ""
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/gata1_base_only_chr20_asxl1_1mb"
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_base_only_chr20_asxl1_1mb"
+)
+
+CAPS=(
+  ""
+  "GATA1"
+  "HIC2"
+)
+
+CONFIG_PATH="${CONFIG_PATHS[${TASK_ID}]}"
+OUTPUT_DIR="${OUTPUT_DIRS[${TASK_ID}]}"
+CAP="${CAPS[${TASK_ID}]}"
+EXPECTED_BW="${OUTPUT_DIR}/${CELLTYPE}/${CAP}/processed/data.bigwig"
+
+if [[ ! -f "${CONFIG_PATH}" ]]; then
+  echo "Config not found: ${CONFIG_PATH}" >&2
+  exit 2
+fi
+
+if [[ ! -f "${ATLAS_CHROMNITRON_DIR}/inference.py" ]]; then
+  echo "Inference script not found: ${ATLAS_CHROMNITRON_DIR}/inference.py" >&2
+  exit 2
+fi
+
+source /broad/software/free/Linux/redhat_7_x86_64/pkgs/anaconda3_2022.10/etc/profile.d/conda.sh
+conda activate /broad/boxialab/sihengtao/env_all/chromnitron_gpu
+
+export SINGULARITY_BINDPATH=/broad/boxialab/sihengtao:/broad/boxialab/sihengtao
+export PYTHONUNBUFFERED=1
+
+echo "Starting official Chromnitron ${CAP} base-only ${GENE} 1Mb inference"
+echo "  timestamp=$(date -Is)"
+echo "  host=$(hostname)"
+echo "  job_id=${JOB_ID:-local}"
+echo "  task_id=${TASK_ID}"
+echo "  config=${CONFIG_PATH}"
+echo "  output=${OUTPUT_DIR}"
+echo "  model_root=/broad/boxialab/sihengtao/chromnitron/resources/model_weights"
+echo "  base_model=chromnitron_base.pt"
+echo "  cap_model=disabled by inference.use_finetune=disable"
+echo "  cap_label=${CAP}"
+echo "  celltype=${CELLTYPE}"
+echo "  region=${REGION}"
+echo "  expected_bigwig=${EXPECTED_BW}"
+
+cd "${ATLAS_CHROMNITRON_DIR}"
+python inference.py "${CONFIG_PATH}"
+
+echo "Finished official Chromnitron ${CAP} base-only ${GENE} 1Mb inference"
+echo "Expected prediction bigWig path: ${EXPECTED_BW}"

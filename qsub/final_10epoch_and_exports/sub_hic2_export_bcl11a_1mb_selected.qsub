@@ -1,0 +1,96 @@
+#!/bin/bash
+#$ -N hic2_bw_bcl11a
+#$ -cwd
+#$ -l h_vmem=128G
+#$ -l h_rt=48:00:00
+#$ -l gpu=1
+#$ -l os=RedHat8
+#$ -hard
+#$ -t 1-5
+#$ -tc 5
+#$ -m ea
+#$ -M stao@broadinstitute.org
+
+set -euo pipefail
+
+CODE_DIR="/broad/boxialab/sihengtao/chromnitron/chromnitron_finetune"
+EXPORT_HELPER="${CODE_DIR}/scripts/export_hic2_best_adapter_bigwig_1mb.py"
+LOG_DIR="/broad/boxialab/sihengtao/projects/chromnitron_finetune/logs"
+TASK_ID="${SGE_TASK_ID:-}"
+
+mkdir -p "${LOG_DIR}"
+JOB_TAG="${JOB_ID:-local}.${TASK_ID:-unset}"
+RUN_LOG="${LOG_DIR}/hic2_bw_bcl11a.${JOB_TAG}.log"
+exec >"${RUN_LOG}" 2>&1
+
+if [[ ! "${TASK_ID}" =~ ^[0-9]+$ ]] || (( TASK_ID < 1 || TASK_ID > 5 )); then
+  echo "Unsupported SGE_TASK_ID=${TASK_ID:-unset}; expected 1-5" >&2
+  exit 2
+fi
+
+CONDA_SH="/broad/software/free/Linux/redhat_7_x86_64/pkgs/anaconda3_2022.10/etc/profile.d/conda.sh"
+CONDA_ENV="/broad/boxialab/sihengtao/env_all/chromnitron_gpu"
+PY="${PY:-${CONDA_ENV}/bin/python3.9}"
+
+cd "${CODE_DIR}"
+
+source "${CONDA_SH}"
+conda activate "${CONDA_ENV}"
+
+export SINGULARITY_BINDPATH=/broad/boxialab/sihengtao:/broad/boxialab/sihengtao
+export PYTHONUNBUFFERED=1
+
+CONFIG_ROOT="${CODE_DIR}/configs/hic2_bcl11a_export"
+CELLTYPE="check4hic2_anewPaper_single_sample"
+CAP="HIC2"
+ASSEMBLY="hg38"
+REGION="chr2:60005424-61005424"
+GENE="BCL11A"
+
+RUN_DIRS=(
+  ""
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_target_A_log1p_clip_mse_r4_base_lr3em4_8ep/20260426-145616"
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_target_B_clip_mse_r4_base_lr3em4_8ep/20260426-145616"
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_target_D_gamma2_mse_r4_base_lr3em4_8ep/20260426-145616"
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_warmstart_no_atac_dropout/20260329-164943"
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_warmstart_no_atac_dropout/hic2_warmstart_with_atac_dropout/20260328-230921"
+)
+
+RUN_DIR="${RUN_DIRS[${TASK_ID}]}"
+EXPECTED_BW="${RUN_DIR}/hic2_1mb_bigwig/prediction/prediction/${CELLTYPE}/${CAP}/bigwigs/${CAP}_${CELLTYPE}_prediction.bw"
+
+missing_configs=()
+for config_name in infer.yaml data_config.yaml finetune_base.yaml; do
+  [[ -f "${CONFIG_ROOT}/${config_name}" ]] || missing_configs+=("${CONFIG_ROOT}/${config_name}")
+done
+if (( ${#missing_configs[@]} > 0 )); then
+  echo "Missing HIC2 export config file(s): ${missing_configs[*]}" >&2
+  exit 2
+fi
+
+if [[ ! -d "${RUN_DIR}" ]]; then
+  echo "Run directory not found: ${RUN_DIR}" >&2
+  exit 2
+fi
+
+echo "Starting HIC2 ${GENE} 1Mb bigWig export"
+echo "  task_id=${TASK_ID}"
+echo "  run_dir=${RUN_DIR}"
+echo "  config_root=${CONFIG_ROOT}"
+echo "  celltype=${CELLTYPE}"
+echo "  cap=${CAP}"
+echo "  assembly=${ASSEMBLY}"
+echo "  region=${REGION}"
+echo "  force=1"
+echo "  expected_output=${EXPECTED_BW}"
+
+"${PY}" "${EXPORT_HELPER}" \
+  --run-dir "${RUN_DIR}" \
+  --config-root "${CONFIG_ROOT}" \
+  --celltype "${CELLTYPE}" \
+  --cap "${CAP}" \
+  --assembly "${ASSEMBLY}" \
+  --region "${REGION}" \
+  --force
+
+echo "Finished HIC2 ${GENE} 1Mb bigWig export for ${RUN_DIR}"

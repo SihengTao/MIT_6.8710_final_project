@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+
+# OS/editor
+.DS_Store
+.vscode/
+
+# Large genomics/model artifacts
+*.bw
+*.bigwig
+*.zarr
+*.bedGraph
+*.bam
+*.bai
+*.fastq
+*.fq
+*.fastq.gz
+*.fq.gz
+*.pt
+*.pth
+*.ckpt
+
+# Generated figures/reports/logs
+*.png
+*.jpg
+*.jpeg
+*.pdf
+*.docx
+*.pptx
+*.log
+*.aux
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.out
+*.synctex.gz
+
+# Cluster output
+*.o[0-9]*
+*.e[0-9]*

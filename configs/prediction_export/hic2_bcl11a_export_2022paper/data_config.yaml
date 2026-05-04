@@ -1,0 +1,2 @@
+prediction_only: true
+description: Project-local HIC2 export config for 2022 paper adult ATAC predictions.

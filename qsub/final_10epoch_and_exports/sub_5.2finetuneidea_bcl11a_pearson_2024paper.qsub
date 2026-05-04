@@ -1,0 +1,90 @@
+#!/bin/bash
+#$ -N five2_bcl11a
+#$ -cwd
+#$ -l h_vmem=16G
+#$ -l h_rt=02:00:00
+#$ -l os=RedHat8
+#$ -hard
+#$ -t 1-2
+#$ -tc 2
+#$ -m ea
+#$ -M stao@broadinstitute.org
+
+set -euo pipefail
+
+CODE_DIR="/broad/boxialab/sihengtao/chromnitron/chromnitron_finetune"
+EVAL_SCRIPT="${CODE_DIR}/scripts/evaluate_bcl11a_pearson_tracks.py"
+LOG_DIR="/broad/boxialab/sihengtao/projects/chromnitron_finetune/logs"
+TASK_ID="${SGE_TASK_ID:-}"
+CELLTYPE="check4hic2_anewPaper_single_sample"
+REGION="chr2:60005424-61005424"
+BIN_SIZES="50,100,200,1000"
+EXPORT_OUTPUT_NAME="${EXPORT_OUTPUT_NAME:-hic2_1mb_bigwig}"
+
+if [[ ! "${TASK_ID}" =~ ^[0-9]+$ ]] || (( TASK_ID < 1 || TASK_ID > 2 )); then
+  echo "Unsupported SGE_TASK_ID=${TASK_ID:-unset}; expected 1-2" >&2
+  exit 2
+fi
+
+case "${TASK_ID}" in
+  1)
+    LABEL="gata1_from_baseonly_scratch_r4_lr1e4_ep10_2024paper"
+    CAP="GATA1"
+    RUN_DIR="${GATA1_RUN_DIR:-}"
+    PREDICTION_PATH="${GATA1_PREDICTION_PATH:-}"
+    GROUND_TRUTH="${GATA1_GROUND_TRUTH:-/broad/boxialab/sihengtao/projects/check4hic2_anewPaper/chrom2vec_output/SRR21983756_SRR21983758/s9_bigwig/genrich_normalized.bw}"
+    ;;
+  2)
+    LABEL="hic2_from_baseonly_scratch_r4_lr1e4_ep10_2024paper"
+    CAP="HIC2"
+    RUN_DIR="${HIC2_RUN_DIR:-}"
+    PREDICTION_PATH="${HIC2_PREDICTION_PATH:-}"
+    GROUND_TRUTH="${HIC2_GROUND_TRUTH:-/broad/boxialab/sihengtao/projects/check4hic2_anewPaper/chrom2vec_output/SRR21983754_SRR21983752/s9_bigwig/genrich_normalized.bw}"
+    ;;
+esac
+
+if [[ -z "${RUN_DIR}" && -z "${PREDICTION_PATH}" ]]; then
+  echo "Set ${CAP}_RUN_DIR to the completed run directory, or ${CAP}_PREDICTION_PATH to an exported prediction bigWig." >&2
+  exit 2
+fi
+
+if [[ -z "${PREDICTION_PATH}" ]]; then
+  PREDICTION_PATH="${RUN_DIR}/${EXPORT_OUTPUT_NAME}/prediction/prediction/${CELLTYPE}/${CAP}/bigwigs/${CAP}_${CELLTYPE}_prediction.bw"
+fi
+
+mkdir -p "${LOG_DIR}"
+JOB_TAG="${JOB_ID:-manual}.${TASK_ID}"
+RUN_LOG="${LOG_DIR}/five2_bcl11a_pearson.${JOB_TAG}.${LABEL}.log"
+OUTPUT_CSV="${OUTPUT_CSV:-${LOG_DIR}/five2_bcl11a_pearson.${JOB_TAG}.${LABEL}.csv}"
+exec >"${RUN_LOG}" 2>&1
+
+CONDA_SH="/broad/software/free/Linux/redhat_7_x86_64/pkgs/anaconda3_2022.10/etc/profile.d/conda.sh"
+CONDA_ENV="/broad/boxialab/sihengtao/env_all/chromnitron_gpu"
+
+cd "${CODE_DIR}"
+
+source "${CONDA_SH}"
+conda activate "${CONDA_ENV}"
+
+export PYTHONUNBUFFERED=1
+
+echo "Starting 5.2finetuneidea BCL11A Pearson evaluation"
+echo "  task_id=${TASK_ID}"
+echo "  label=${LABEL}"
+echo "  cap=${CAP}"
+echo "  run_dir=${RUN_DIR:-not_used}"
+echo "  prediction=${PREDICTION_PATH}"
+echo "  ground_truth=${GROUND_TRUTH}"
+echo "  region=${REGION}"
+echo "  bin_sizes=${BIN_SIZES}"
+echo "  output_csv=${OUTPUT_CSV}"
+
+python "${EVAL_SCRIPT}" \
+  --ground-truth "${GROUND_TRUTH}" \
+  --track "${LABEL}=${PREDICTION_PATH}" \
+  --region "${REGION}" \
+  --bin-sizes "${BIN_SIZES}" \
+  --output-csv "${OUTPUT_CSV}" \
+  --strict
+
+echo "Finished 5.2finetuneidea BCL11A Pearson evaluation: ${LABEL}"

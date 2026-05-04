@@ -1,0 +1,3 @@
+source_id	path	source_type	used_for	notes
+corrected_100bp_summary	/broad/boxialab/sihengtao/projects/chromnitron_finetune/20260503_analysis/figure4_bcl11a_100bp_corrected/figure4_bcl11a_pearson_100bp_corrected_summary.tsv	tsv	candidate ordering and corrected 100 bp mean Pearson bar values	Figure 4 uses mean_100 across GATA1 and HIC2 at chr2:60005424-61005424.
+corrected_100bp_detail	/broad/boxialab/sihengtao/projects/chromnitron_finetune/20260503_analysis/figure4_bcl11a_100bp_corrected/figure4_bcl11a_pearson_100bp_corrected.tsv	tsv	individual GATA1/HIC2 corrected 100 bp Pearson points and source paths	Pearson scale rule: prediction as-is; ground-truth ChIP clip0 + log1p.

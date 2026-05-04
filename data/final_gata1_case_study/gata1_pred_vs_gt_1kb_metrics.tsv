@@ -1,0 +1,5 @@
+locus	chrom	start	end	bin_size	comparison	pearson	n_bins	n_finite_pairs	source_label
+BCL11A	chr2	60005424	61005424	1000	prediction_vs_gt	0.8598179426915658	1000	1000	check4hic2_anewPaper_single_sample
+BCL11A	chr2	60005424	61005424	1000	atac_baseline_vs_gt	0.6376120565282358	1000	1000	check4hic2_anewPaper_single_sample
+ASXL1	chr20	31898825	32898825	1000	prediction_vs_gt	0.7613272333660027	1000	1000	check4hic2_anewPaper_single_sample
+ASXL1	chr20	31898825	32898825	1000	atac_baseline_vs_gt	0.6764484511436416	1000	1000	check4hic2_anewPaper_single_sample

@@ -1,0 +1,3 @@
+track	n_bases	raw_missing_or_nonfinite_set_to_zero	raw_negative_values_clipped_to_zero	written_intervals_after_run_length_encoding
+HIC2_ground_truth_ChIP	1000000	0	157455	20761
+ATAC	1000000	0	849563	18710

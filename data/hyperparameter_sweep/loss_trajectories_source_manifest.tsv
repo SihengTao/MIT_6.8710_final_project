@@ -1,0 +1,3 @@
+target	source_metrics_csv	sha256	mtime_utc	n_rows	epochs	columns_used	generated_utc
+GATA1	/broad/boxialab/sihengtao/projects/chromnitron_finetune/gata1_from_baseonly_scratch_r4_lr1e4_ep10_2024paper/20260502-154138/metrics.csv	473185b331077a5fd35facd2978075d1dbb743eaf1145badeb57a3a6c32299ca	2026-05-03T06:30:47+00:00	10	1-10	epoch,train_loss,val_loss	2026-05-03T22:37:30+00:00
+HIC2	/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_from_baseonly_scratch_r4_lr1e4_ep10_2024paper/20260502-154138/metrics.csv	c19d63770d2255921fd349abfcd47be070c424077978a7275459c29acfc10078	2026-05-03T06:43:17+00:00	10	1-10	epoch,train_loss,val_loss	2026-05-03T22:37:30+00:00

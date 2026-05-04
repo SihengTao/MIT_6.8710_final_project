@@ -1,0 +1,2 @@
+sample_id,atac_path,target_path
+check4hic2_2022_adult_sample,/broad/boxialab/sihengtao/projects/check4hic2/chrom2vec_output/SRR14362202_SRR14362203/s8_normalized/genrich_normalized.zarr,/broad/boxialab/sihengtao/projects/check4hic2/chrom2vec_output/SRR14362228_SRR14362227/s8_normalized/genrich_normalized.zarr

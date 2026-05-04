@@ -1,0 +1,172 @@
+\documentclass[nohyperref]{article}
+
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{balance}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{hyperref}
+
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+
+\usepackage[accepted]{icml2022}
+
+\icmltitlerunning{Chromnitron Fine-Tuning}
+\hypersetup{
+  pdftitle={Improving Chromnitron Predictions in Unseen Erythroid Cell Types with Target-Specific Fine-Tuning},
+  pdfauthor={Siheng Tao, Qiayi Zha, Jenny Yang, Xiaochen Du}
+}
+
+\begin{document}
+
+\twocolumn[
+\icmltitle{Improving Chromnitron Predictions in Unseen Erythroid\\Cell Types with Target-Specific Fine-Tuning}
+
+\begin{center}
+Siheng Tao \quad Qiayi Zha \quad Jenny Yang \quad Xiaochen Du
+\end{center}
+
+\icmlkeywords{chromatin, transcription factor binding, ChIP-seq, ATAC-seq, LoRA fine-tuning, regulatory genomics}
+
+\vskip 0.3in
+]
+
+\begin{abstract}
+Deep learning models for transcription factor (TF) and chromatin-associated protein (CAP) binding promise to reduce the need for exhaustive ChIP-seq experiments, but their behavior in unseen cell types is uncertain. We study Chromnitron, a multimodal model that predicts ChIP-seq-like binding signal from DNA sequence, ATAC-seq accessibility, and a protein embedding. In held-out external erythroid HIC2 data we find that zero-shot predictions are unstable: at signal-rich loci, predictions correlate more strongly with ATAC than with matched ChIP-seq ground truth. We test span-based ATAC dropout as a direct intervention, but it underperforms the best non-dropout candidate, indicating that random accessibility masking does not remove this ATAC-like behavior. After aligning the prediction and ground-truth signal scales, we run a structured LoRA fine-tuning sweep on the BCL11A locus, select the best recipe (C1), and run a 10-epoch target-specific fine-tune. The final GATA1 fine-tune raises 100\,bp Pearson against ground-truth ChIP from 0.43 to 0.78 at BCL11A and outperforms an ATAC baseline at both BCL11A (0.78 vs.\ 0.52) and ASXL1 (0.64 vs.\ 0.50). For HIC2 the same procedure barely moves Pearson (0.51 to 0.51), but the case study shows the model removes a false-positive binding peak in a no-binding region---a biologically meaningful change that profile Pearson cannot reward. Pearson is therefore useful but insufficient as the only metric for sparse ChIP-seq-like tracks.
+\end{abstract}
+
+\section{Introduction}
+
+Mapping transcription factor (TF) and chromatin-associated protein (CAP) binding is central to understanding gene regulation. ChIP-seq~\citep{johnson2007chipseq} directly measures these binding landscapes, but generating matched ChIP-seq data for every protein, cell type, and perturbation is experimentally expensive. Predictive models that combine DNA sequence, chromatin accessibility (measured by ATAC-seq~\citep{buenrostro2013atacseq}), and protein identity can therefore serve as computational priors for regulatory genomics; earlier sequence- and accessibility-based predictors include DeepSEA~\citep{zhou2015deepsea}, Basenji~\citep{kelley2018basenji}, BPNet~\citep{avsec2021bpnet}, Enformer~\citep{avsec2021enformer}, and maxATAC~\citep{cazares2023maxatac}.
+
+Chromnitron~\citep{tan2025chromnitron}, the \emph{Chromatin omni-modal transformer}, takes a different approach: it is a multimodal model that predicts base-resolution CAP binding from three modalities through modality-specific encoders feeding a shared transformer backbone and decoder. The three inputs are local DNA sequence, cell-type-specific ATAC-seq accessibility, and a protein representation produced from the CAP amino-acid sequence by a protein language model. The released model is pre-trained on 1{,}105 CAP ChIP-seq datasets across five cell types and individually fine-tuned per CAP, and is reported to generalize to hundreds of CAPs in cell types unseen during training. This design is attractive because it can in principle learn both general sequence-level binding preferences and cell-type-specific chromatin context. The key practical question for downstream users is whether such a multimodal model remains reliable when transferred to cell types outside its training distribution.
+
+Our project evaluates that question in erythroid-related data. We focus on a concrete hypothesis: \emph{Chromnitron's performance drop in external erythroid settings reflects distribution shift, where the model has not learned sufficiently transferable regulatory rules}. One symptom of such a shift is an ATAC-like behavior, where the model predicts elevated signal in accessible regions without recovering target-specific ChIP-seq peaks.
+
+The paper proceeds in four steps. (i) We show that zero-shot Chromnitron prediction is unstable in held-out erythroid HIC2 data. (ii) We test ATAC dropout as a direct intervention and find that naive span-based masking does not solve the problem. (iii) We correct a signal-scale mismatch and run a LoRA fine-tuning sweep under a consistent evaluation rule. (iv) We show strong GATA1 improvement after target-specific fine-tuning, and use HIC2 to illustrate why sparse ChIP-seq tracks need case-study or peak-aware evaluation beyond Pearson alone.
+
+\section{Methods}
+
+\subsection{Model and prediction task}
+
+Chromnitron takes 8\,192 bp of DNA sequence, matched ATAC-seq signal over the same window, and a 2560-dimensional protein embedding as input, and outputs a base-resolution ChIP-seq-like binding profile for the requested TF or CAP. We use the released base checkpoint \texttt{chromnitron\_base} (hidden 384, 16 attention blocks, 4 output scales). The base model is held fixed during fine-tuning; adaptation happens through LoRA adapters~\citep{hu2022lora} of rank 4 inserted into the model, optimized with AdamW (gradient clip 1.0, no weight decay) under a \texttt{ReduceLROnPlateau} schedule. ATAC input is internally log1p-transformed; Chromnitron's prediction tracks are also on a log1p scale.
+
+\subsection{Data and evaluation regions}
+
+The held-out diagnostic and the fine-tuning data come from an external erythroid sample (a 2024 study), processed through the chrom2vec pipeline to produce \texttt{genrich\_normalized} bigWig tracks for matched ATAC, GATA1 ChIP, and HIC2 ChIP. For all fine-tunes, chr10 is the validation chromosome and chr20 is the test chromosome; remaining autosomes are used for training. Two 1\,Mb evaluation windows are used throughout: BCL11A on \texttt{chr2:60005424--61005424} and ASXL1 on \texttt{chr20:31898825--32898825}. Profile metrics are computed in 100\,bp non-overlapping bins over the 1\,Mb window, giving 10\,000 bins per locus. Held-out zero-shot diagnostics additionally use chr2 and chr10.
+
+We compare predictions to matched ChIP-seq ground truth using Pearson correlation, treating Pearson as a screening metric rather than the only criterion for sparse tracks. Three pairwise comparisons define the main diagnostic:
+\begin{itemize}
+    \item Prediction vs.\ ChIP: whether the model recovers target-specific binding.
+    \item ATAC vs.\ Prediction: whether the model output mostly follows accessibility.
+    \item ATAC vs.\ ChIP: how strong the accessibility baseline is by itself.
+\end{itemize}
+If Prediction-vs-ChIP is low while ATAC-vs-Prediction is high, the prediction is more accessibility-like than ChIP-like.
+
+\subsection{Signal-scale correction}
+
+Chromnitron prediction tracks are already on a log1p scale and are used as-is. The chrom2vec-derived ChIP and ATAC tracks are not pre-log1p-scaled, so we set missing or non-finite values to zero, clip negative values to zero, and apply $\log(1+x)$ before computing Pearson. Negative ChIP signal is more consistent with background correction or numerical artifacts than with negative binding, and the log1p transform reduces dominance of extreme high-signal bins. This step is a prerequisite for trustworthy Pearson, not a standalone contribution.
+
+\subsection{ATAC dropout}
+
+We tested span-based ATAC dropout as a direct intervention against ATAC-like behavior. During training, contiguous spans of 32 ATAC positions were independently zeroed with target mask fraction 0.20 over the 8\,192 bp window, on top of the same warm-start LoRA fine-tuning recipe (HIC2 target, rank 4, $\textrm{lr}=10^{-5}$, 5 epochs, weighted multiscale MSE+Pearson loss with peak weight 4). The intent was to force the model to use sequence and protein identity rather than copying the accessibility profile.
+
+\subsection{Hyperparameter sweep and final fine-tuning}
+
+After scale correction, we ran a 12-candidate sweep (C1--C12) varying loss family (weighted multiscale MSE+Pearson, target-transform variants, plain MSE), Pearson loss term on/off, LoRA rank ($r{=}4$ or $r{=}8$), warm-start type (LoRA initialized from scratch on top of \texttt{chromnitron\_base} vs.\ initialized from the released HIC2 LoRA adapter), learning rate ($3{\times}10^{-4}$ or $10^{-3}$), and epochs (5 or 8). All candidates were evaluated by 100\,bp Prediction-vs-ChIP Pearson at the BCL11A 1\,Mb locus on two prediction targets, GATA1 and HIC2. C1 was selected as the best recipe: weighted multiscale MSE+Pearson loss (Pearson term on, weight 0.5; multiscale bins [8, 32, 128]; peak weight 4), $r{=}4$, LoRA from scratch on top of the base model, $\textrm{lr}=3{\times}10^{-4}$, 5 epochs.
+
+For the final result we kept C1's structural choices ($r{=}4$ LoRA from scratch on \texttt{chromnitron\_base}; weighted multiscale MSE+Pearson loss) and extended training to 10 epochs, separately for each target (GATA1, HIC2). Pearson is again computed in 100\,bp bins. Because HIC2 ChIP is sparse in the case-study region, we treat Pearson as incomplete for HIC2 and complement it with a track-level case study to distinguish removal of false-positive binding from true absence of binding.
+
+\subsection{Compute}
+
+All fine-tuning ran on a single node with 4 NVIDIA A30 GPUs. A 10-epoch per-CAP fine-tune took ${\sim}12$ wall-clock hours (${\sim}48$ GPU-hours per CAP). The full study---12-candidate sweep (mix of 5- and 8-epoch runs), ATAC-dropout ablation, and final 10-epoch fine-tunes for GATA1 and HIC2---totals on the order of 500 GPU-hours. LoRA keeps each run light relative to full pre-training, but scaling target-specific fine-tuning genome-wide across many CAPs would still incur substantial compute.
+
+\section{Results}
+
+\subsection{Zero-shot prediction reveals an external generalization gap}
+
+In a training-aligned check, Chromnitron behaved normally: at 1\,kb resolution, Prediction-vs-Experiment Pearson was 0.816, ATAC-vs-Prediction 0.813, and ATAC-vs-Experiment 0.666. The model and evaluation pipeline were therefore not globally broken.
+
+The held-out erythroid HIC2 setting showed a different pattern. Across chr2 and chr10 at 100\,bp resolution, ATAC-vs-Prediction Pearson was 0.602 while Prediction-vs-ChIP was only 0.326 and ATAC-vs-ChIP was 0.098. Restricting to signal-rich 100\,bp peak bins, Prediction-vs-ChIP dropped further to 0.051 on chr2 and 0.043 on chr10. Zero-shot predictions in this setting were therefore more ATAC-like than ChIP-like, and the gap was largest exactly where TF-specific peak recovery matters.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{../milestone/Picture1.png}
+\caption{Held-out HIC2 zero-shot behavior. Pearson and Spearman are shown over progressively signal-rich top-percentile bins for ATAC vs.\ ChIP, ATAC vs.\ Prediction, and Prediction vs.\ ChIP at 50/250/500/1000\,bp. Prediction tracks ATAC more closely than ChIP, especially in signal-rich bins, motivating target-domain adaptation rather than treating off-the-shelf prediction as uniformly reliable.}
+\label{fig:heldout}
+\end{figure}
+
+\subsection{ATAC dropout is a negative result}
+
+Because zero-shot predictions appeared ATAC-like, we tested span-based ATAC dropout (20\% mask fraction, 32-position spans) as a direct intervention. At the BCL11A transfer locus, ATAC dropout improved GATA1 Pearson over an early no-dropout warm-start run, but did not exceed the best non-dropout candidate. At 100\,bp, GATA1 Pearson reached 0.089 with ATAC dropout vs.\ 0.114 for the best non-dropout candidate; HIC2 reached 0.177 vs.\ 0.187 (Figure~\ref{fig:dropout}).
+
+Random masking of accessibility is therefore not a fix for the ATAC-like behavior: ATAC carries true chromatin context, and removing parts of it without a target-specific learning signal removes useful structure as well.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figure_dropout.png}
+\caption{ATAC dropout ablation at the BCL11A 1\,Mb locus, predicting GATA1 and HIC2. Bars: 100\,bp Prediction-vs-ChIP Pearson. ATAC dropout did not exceed the best non-dropout candidate for either target, indicating that span-based ATAC masking is not an adequate correction for ATAC-like behavior.}
+\label{fig:dropout}
+\end{figure}
+
+\subsection{Corrected recipe selection identifies C1}
+
+Under the corrected signal scale, we compared 12 fine-tuning candidates at the BCL11A locus in 100\,bp bins, with GATA1 and HIC2 as prediction targets (not as genomic loci). C1 had the highest mean Pearson across the two targets (GATA1 0.435, HIC2 0.508, mean 0.471) and was selected as the structural recipe (Figure~\ref{fig:sweep}).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figure_sweep.png}
+\caption{Initial fine-tuning recipe selection. Candidates were ranked by mean 100\,bp Prediction-vs-ChIP Pearson (across GATA1 and HIC2) at the BCL11A 1\,Mb locus, computed prediction-as-is vs.\ ground-truth ChIP after \texttt{clip0+log1p}. C1 (weighted multiscale MSE+Pearson loss, $r{=}4$, scratch LoRA on \texttt{chromnitron\_base}, lr $3{\times}10^{-4}$, 5\,ep) was the top candidate.}
+\label{fig:sweep}
+\end{figure}
+
+\subsection{Final fine-tuning improves GATA1 and exposes a sparse-track metric issue}
+
+The 10-epoch target-specific fine-tune produced two complementary observations. GATA1 100\,bp Pearson at BCL11A rose from 0.43 (C1) to 0.78. HIC2 changed only from 0.51 to 0.51 by Pearson, but this should not be read as biological failure: HIC2 ChIP is sparse in the case-study region, and where ground truth has no binding, the relevant behavior is whether the model suppresses a false-positive prediction, not whether profile Pearson moves substantially.
+
+\begin{table}[t]
+\caption{Final 10-epoch fine-tuning at the BCL11A locus, 100\,bp Pearson against ground-truth ChIP. Pearson supports GATA1 improvement but is uninformative for sparse HIC2 no-binding regions.}
+\label{tab:final}
+\centering
+\begin{tabular}{lcc}
+\toprule
+Target & C1 & Final 10-ep \\
+\midrule
+GATA1 & 0.43 & 0.78 \\
+HIC2  & 0.51 & 0.51 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A track-level GATA1 case study supports the positive result beyond a single number. At 100\,bp resolution, the final GATA1 prediction was closer to ChIP than the matched ATAC baseline at both BCL11A and ASXL1: BCL11A Prediction-vs-ChIP 0.78 vs.\ ATAC-vs-ChIP 0.52, and ASXL1 0.64 vs.\ 0.50. The BCL11A track view (Figure~\ref{fig:gata1}) gives two qualitative checks. First, the fine-tuned model recovers the dominant GATA1 ChIP-seq peaks where binding is present. Second, where promoter-proximal ATAC is high but no GATA1 ChIP peak is called, the model does not call a corresponding GATA1 peak, so it does not simply convert accessibility into binding.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figure_tracks_bcl11a.png}
+\caption{Final GATA1 fine-tuned prediction at the BCL11A locus, tracks ordered top to bottom as ATAC-seq, experimental GATA1 ChIP-seq, and predicted GATA1 ChIP-seq, all on a 0--1 visualization range. The two key observations are: (i) the model correctly recovers the dominant GATA1 ChIP-seq peaks where binding is present; and (ii) at the promoter-proximal region where ATAC signal is high but no GATA1 binding peak exists in the experimental track, the prediction does \emph{not} produce a false peak. Fine-tuning therefore improves TF-specific binding prediction rather than copying accessibility.}
+\label{fig:gata1}
+\end{figure}
+
+\balance
+\section{Discussion and Conclusion}
+
+The main problem in this project is not high correlation with ATAC per se; it is unreliable performance in unseen erythroid cell types. ATAC-like behavior was the diagnostic clue: when the prediction follows ATAC more closely than ChIP, the model may be relying on an accessibility prior rather than recovering TF-specific binding.
+
+The ATAC-dropout experiment shows that this issue requires more than naive masking. Accessibility is a biologically meaningful input, not a nuisance variable. Better directions are structured debiasing of the ATAC modality, residual modeling of ChIP signal beyond accessibility, or training objectives that explicitly separate accessibility priors from TF-specific binding signal.
+
+The most effective intervention here was scale-aware target-specific LoRA fine-tuning. After aligning prediction and ground-truth signal scales, we selected a stable recipe (C1) and ran a 10-epoch fine-tune. The final GATA1 result improves over both the C1 starting point and the ATAC baseline at BCL11A and ASXL1. The HIC2 result adds a different lesson: for sparse ChIP-seq-like tracks, profile Pearson cannot reward the biologically useful behavior of removing a false-positive binding peak in a no-binding region. Evaluation should therefore combine profile correlation with peak-aware or case-study checks.
+
+\paragraph{Limitations.} Our final claim rests on two CAP targets (GATA1, HIC2) and two 1\,Mb evaluation windows (BCL11A, ASXL1) within a single erythroid context. The ATAC-coupling diagnostic is correlation-based and does not by itself prove modality reliance; only an ablation could establish that. The ATAC-dropout setting was a single span-based recipe at one mask fraction, not a full sweep over masking strategies. We do not report cross-cell-type generalization beyond the single external erythroid sample.
+
+\paragraph{Summary.} Chromnitron's zero-shot generalization is not uniformly stable in external erythroid data, and naive ATAC dropout does not fix it. Scale-aware target-specific LoRA fine-tuning materially improves GATA1 prediction at biologically meaningful BCL11A and ASXL1 loci, while HIC2 illustrates that sparse ChIP-seq tracks need more than profile Pearson alone---a model can become more biologically plausible by removing false-positive binding even when Pearson barely changes.
+
+\section*{Author Contributions}
+
+Siheng Tao led the project, including data organization, Chromnitron and chrom2vec analysis, and the fine-tuning experiments. Xiaochen Du advised on the fine-tuning strategy and modeling design choices. Qiayi Zha contributed to the biological framing of CAP/TF binding and the erythroid regulatory context. Jenny Yang contributed to figure organization and report development.
+
+\nocite{tan2025chromnitron,buenrostro2013atacseq,johnson2007chipseq,zhou2015deepsea,kelley2018basenji,avsec2021enformer,avsec2021bpnet,cazares2023maxatac,huang2022hic2,bauer2013bcl11a,canver2015bcl11a,hu2022lora}
+\bibliography{references}
+\bibliographystyle{icml2022}
+
+\end{document}

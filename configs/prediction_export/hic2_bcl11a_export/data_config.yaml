@@ -1,0 +1,2 @@
+prediction_only: true
+description: Project-local HIC2 BCL11A bigWig export config for completed finetune runs.

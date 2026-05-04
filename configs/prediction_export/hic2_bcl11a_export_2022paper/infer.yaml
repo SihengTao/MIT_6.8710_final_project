@@ -1,0 +1,9 @@
+output_path: null
+model_version: finetuning.model.v4_5
+model_path: null
+region: chr2:60005424-61005424
+cap_list:
+  - HIC2
+cell_type: check4hic2_2022_adult_sample
+batch_size: 1
+no_confidence: true

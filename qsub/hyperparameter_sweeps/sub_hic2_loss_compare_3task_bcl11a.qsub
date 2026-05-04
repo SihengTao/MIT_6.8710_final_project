@@ -1,0 +1,224 @@
+#!/bin/bash
+#$ -N hic2_loss3cmp
+#$ -cwd
+#$ -l h_vmem=128G
+#$ -l h_rt=48:00:00
+#$ -l gpu=1
+#$ -l os=RedHat8
+#$ -hard
+#$ -t 1-3
+#$ -tc 3
+#$ -m ea
+#$ -M stao@broadinstitute.org
+
+set -euo pipefail
+
+CODE_DIR="/broad/boxialab/sihengtao/chromnitron/chromnitron_finetune"
+RUN_SCRIPT="${RUN_SCRIPT:-${CODE_DIR}/run_hic2_finetune.py}"
+CONFIG_GENERATOR="${CONFIG_GENERATOR:-${CODE_DIR}/scripts/make_hic2_trial_config.py}"
+EXPORT_HELPER="${EXPORT_HELPER:-${CODE_DIR}/scripts/export_hic2_best_adapter_bigwig_1mb.py}"
+BCL11A_HG38_DEFAULT_1MB_REGION="chr2:60005424-61005424"
+LOG_DIR="/broad/boxialab/sihengtao/projects/chromnitron_finetune/logs"
+mkdir -p "$LOG_DIR"
+
+JOB_TAG="${JOB_ID:-local}.${SGE_TASK_ID:-1}"
+RUN_LOG="${LOG_DIR}/hic2_loss3cmp.${JOB_TAG}.log"
+exec >"${RUN_LOG}" 2>&1
+
+CONDA_SH="/broad/software/free/Linux/redhat_7_x86_64/pkgs/anaconda3_2022.10/etc/profile.d/conda.sh"
+CONDA_ENV="/broad/boxialab/sihengtao/env_all/chromnitron_gpu"
+
+cd "${CODE_DIR}"
+
+source "${CONDA_SH}"
+conda activate "${CONDA_ENV}"
+
+export SINGULARITY_BINDPATH=/broad/boxialab/sihengtao:/broad/boxialab/sihengtao
+export PYTHONUNBUFFERED=1
+export NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
+
+BASE_CONFIG="${BASE_CONFIG:-${CODE_DIR}/configs/hic2_no_atac_dropout.yaml}"
+SAVE_ROOT="${SAVE_ROOT:-/broad/boxialab/sihengtao/projects/chromnitron_finetune}"
+CONFIG_DIR="${CONFIG_DIR:-${CODE_DIR}/configs/generated_hic2_loss_compare_3task}"
+TASK_ID="${SGE_TASK_ID:-1}"
+EPOCHS="${EPOCHS:-5}"
+EARLY_STOPPING_PATIENCE="${EARLY_STOPPING_PATIENCE:-4}"
+HIC2_START_MODE="${HIC2_START_MODE:-base}"
+
+HIC2_EXPORT_CONFIG_ROOT="${HIC2_EXPORT_CONFIG_ROOT:-${CODE_DIR}/configs/hic2_bcl11a_export}"
+HIC2_EXPORT_CELLTYPE="${HIC2_EXPORT_CELLTYPE:-check4hic2_anewPaper_single_sample}"
+HIC2_EXPORT_CAP="${HIC2_EXPORT_CAP:-HIC2}"
+HIC2_EXPORT_REGION="${HIC2_EXPORT_REGION:-${BCL11A_HG38_DEFAULT_1MB_REGION}}"
+HIC2_EXPORT_FORCE="${HIC2_EXPORT_FORCE:-1}"
+
+trim_run_artifacts() {
+  local run_root="$1"
+  if [[ ! -d "${run_root}" ]]; then
+    echo "Run root not found for trimming: ${run_root}"
+    return 0
+  fi
+  local checkpoints_dir="${run_root}/checkpoints"
+  if [[ -d "${checkpoints_dir}" ]]; then
+    find "${checkpoints_dir}" -type f \( \
+      -name "epoch_*_adapter.pt" -o \
+      -name "epoch_*_training_state.pt" -o \
+      -name "last_adapter.pt" -o \
+      -name "last_training_state.pt" \
+    \) -delete
+  fi
+  find "${run_root}" -type f \( \
+    -name "last_adapter.pt" -o \
+    -name "last_training_state.pt" \
+  \) -delete
+}
+
+validate_hic2_export_config() {
+  if [[ "${HIC2_EXPORT_DISABLE:-0}" == "1" ]]; then
+    return 0
+  fi
+  local missing=()
+  for config_name in infer.yaml data_config.yaml finetune_base.yaml; do
+    [[ -f "${HIC2_EXPORT_CONFIG_ROOT}/${config_name}" ]] || missing+=("${HIC2_EXPORT_CONFIG_ROOT}/${config_name}")
+  done
+  if (( ${#missing[@]} > 0 )); then
+    echo "HIC2 bigWig export is default-on, but export config file(s) are missing: ${missing[*]}" >&2
+    exit 2
+  fi
+}
+
+maybe_export_hic2_bigwig() {
+  local run_dir="$1"
+  if [[ "${HIC2_EXPORT_DISABLE:-0}" == "1" ]]; then
+    echo "Skipping HIC2 1Mb bigWig export because HIC2_EXPORT_DISABLE=1."
+    return 0
+  fi
+
+  local export_cmd=(
+    python "${EXPORT_HELPER}"
+    --run-dir "${run_dir}"
+    --config-root "${HIC2_EXPORT_CONFIG_ROOT}"
+    --celltype "${HIC2_EXPORT_CELLTYPE}"
+    --region "${HIC2_EXPORT_REGION}"
+    --cap "${HIC2_EXPORT_CAP}"
+  )
+  if [[ "${HIC2_EXPORT_FORCE}" != "0" ]]; then
+    export_cmd+=(--force)
+  fi
+  if [[ -n "${HIC2_EXPORT_ASSEMBLY:-}" ]]; then
+    export_cmd+=(--assembly "${HIC2_EXPORT_ASSEMBLY}")
+  fi
+  if [[ -n "${HIC2_EXPORT_OUTPUT_DIR:-}" ]]; then
+    export_cmd+=(--output-dir "${HIC2_EXPORT_OUTPUT_DIR}")
+  fi
+
+  echo "Running default HIC2 BCL11A 1Mb bigWig export for ${run_dir}"
+  "${export_cmd[@]}"
+}
+
+resolve_current_run_dir_from_log() {
+  local run_log="$1"
+  local expected_prefix="$2"
+  local run_dir=""
+
+  if [[ ! -f "${run_log}" ]]; then
+    echo "Run log not found for trim/export resolution: ${run_log}" >&2
+    return 1
+  fi
+
+  run_dir="$(awk '/Saving run outputs to / {dir = substr($0, index($0, "Saving run outputs to ") + length("Saving run outputs to "))} END {print dir}' "${run_log}")"
+  if [[ -z "${run_dir}" ]]; then
+    echo "Could not resolve current run_dir from log: ${run_log}" >&2
+    return 1
+  fi
+  if [[ "${run_dir}" != "${expected_prefix}"* ]]; then
+    echo "Skipping trim/export for unexpected run_dir: ${run_dir}" >&2
+    return 1
+  fi
+
+  printf '%s\n' "${run_dir}"
+}
+
+case "${HIC2_START_MODE}" in
+  base|no-warmstart|no_warmstart|base-model|base_model)
+    START_MODE_TAG="base"
+    WARM_START_ARGS=(--clear-warm-start-lora-path)
+    ;;
+  full-warmstart|full_warmstart|fullws|warmstart|full)
+    START_MODE_TAG="fullws"
+    WARM_START_ARGS=()
+    ;;
+  *)
+    echo "Unsupported HIC2_START_MODE=${HIC2_START_MODE}; expected base or full-warmstart" >&2
+    exit 2
+    ;;
+esac
+
+case "${TASK_ID}" in
+  1)
+    LOSS_LABEL="mse"
+    PEARSON_TAG="pearsonoff"
+    LOSS_JSON='{"name":"mse"}'
+    ;;
+  2)
+    LOSS_LABEL="weighted_multiscale"
+    PEARSON_TAG="pearsonoff"
+    LOSS_JSON='{"name":"weighted_multiscale_mse","peak_weight":4.0,"peak_weight_cap":10.0,"multiscale_bins":[8,32,128],"multiscale_weight":0.25}'
+    ;;
+  3)
+    LOSS_LABEL="weighted_multiscale"
+    PEARSON_TAG="pearsonon"
+    LOSS_JSON='{"name":"weighted_multiscale_mse_pearson","peak_weight":4.0,"peak_weight_cap":10.0,"multiscale_bins":[8,32,128],"multiscale_weight":0.25,"pearson_weight":0.5}'
+    ;;
+  *)
+    echo "Unsupported SGE_TASK_ID=${TASK_ID}; expected 1-3" >&2
+    exit 2
+    ;;
+esac
+
+validate_hic2_export_config
+
+LORA_R="4"
+LR="3e-4"
+LR_LABEL="${LR//./p}"
+LR_LABEL="${LR_LABEL//-/m}"
+RUN_NAME="hic2_loss_${LOSS_LABEL}_${PEARSON_TAG}_r${LORA_R}_${START_MODE_TAG}_lr${LR_LABEL}_${EPOCHS}ep"
+TRIAL_CONFIG="${CONFIG_DIR}/${RUN_NAME}.${JOB_TAG}.yaml"
+
+echo "Starting HIC2 3-task loss comparison"
+echo "  run_name=${RUN_NAME}"
+echo "  start_mode=${START_MODE_TAG}"
+echo "  lora_r=${LORA_R}"
+echo "  trainable_mode=lora"
+echo "  learning_rate=${LR}"
+echo "  epochs=${EPOCHS}"
+echo "  loss=${LOSS_JSON}"
+echo "  config=${TRIAL_CONFIG}"
+echo "  export_config_root=${HIC2_EXPORT_CONFIG_ROOT}"
+echo "  export_celltype=${HIC2_EXPORT_CELLTYPE}"
+echo "  export_cap=${HIC2_EXPORT_CAP}"
+echo "  export_region=${HIC2_EXPORT_REGION}"
+
+python "${CONFIG_GENERATOR}" \
+  --base-config "${BASE_CONFIG}" \
+  --output "${TRIAL_CONFIG}" \
+  --run-name "${RUN_NAME}" \
+  --save-root "${SAVE_ROOT}" \
+  --epochs "${EPOCHS}" \
+  --early-stopping-patience "${EARLY_STOPPING_PATIENCE}" \
+  --learning-rate "${LR}" \
+  --lora-r "${LORA_R}" \
+  --trainable-mode lora \
+  --loss-json "${LOSS_JSON}" \
+  "${WARM_START_ARGS[@]}"
+
+torchrun --standalone --nproc_per_node="${NPROC_PER_NODE}" \
+  "${RUN_SCRIPT}" \
+  "${TRIAL_CONFIG}"
+
+EXPECTED_RUN_PREFIX="${SAVE_ROOT}/${RUN_NAME}/"
+if CURRENT_RUN_DIR="$(resolve_current_run_dir_from_log "${RUN_LOG}" "${EXPECTED_RUN_PREFIX}")"; then
+  trim_run_artifacts "${CURRENT_RUN_DIR}"
+  maybe_export_hic2_bigwig "${CURRENT_RUN_DIR}"
+fi
+
+echo "Finished ${RUN_NAME}; kept best_adapter.pt, metrics/config/summary files, removed epoch/last checkpoints, and exported default BCL11A bigWig unless disabled."

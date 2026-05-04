@@ -1,0 +1,82 @@
+experiment:
+  run_name: gata1_from_baseonly_scratch_r4_lr1e4_ep10_2024paper
+  save_root: /broad/boxialab/sihengtao/projects/chromnitron_finetune
+
+code:
+  atlas_config_path: /broad/boxialab/sihengtao/chromnitron/atlas_tcell_differentiation/chromnitron/examples/local_config.yaml
+
+model:
+  target_cap: GATA1
+  base_model_path: /broad/boxialab/sihengtao/chromnitron/resources/model_weights/chromnitron_base.pt
+  warm_start_lora_path: ""
+  num_genomic_features: 1
+  hidden: 384
+  num_attn_blocks: 16
+  num_of_scale: 4
+  num_targets: 1
+  no_confidence_prediction: false
+  prot_dim: 2560
+  sample_per_chunk: 4
+  confidence_weight: 0.0
+  lora_r: 4
+  trainable_mode: lora
+
+data:
+  manifest_path: ../../manifests/gata1_2024paper_single_sample.csv
+  assembly: hg38
+  chrom_sizes_path: /broad/boxialab/sihengtao/chromnitron/resources/chr_sizes.bed
+  excluded_region_path: auto
+  val_chrs:
+    - chr10
+  test_chrs:
+    - chr20
+  window_size: 8192
+  chunk_size: 100000
+  sample_per_chunk: 4
+  atac_log1p: true
+  apply_reverse_complement: true
+  apply_gaussian_noise: true
+  cap_embedding_key: embedding
+  verbose: false
+
+training:
+  seed: 42
+  epochs: 10
+  batch_size: 1
+  num_workers: 4
+  prefetch_factor: 4
+  pin_memory: true
+  learning_rate: 0.0001
+  weight_decay: 0.0
+  gradient_clip_norm: 1.0
+  gradient_accumulation_steps: 1
+  warmup_steps: 0
+  tf32: true
+  log_every_steps: 50
+  early_stopping_patience: 10
+  scheduler:
+    mode: min
+    factor: 0.5
+    patience: 3
+    min_lr: 0.0
+
+loss:
+  name: weighted_multiscale_mse_pearson
+  peak_weight: 4.0
+  peak_weight_cap: 10.0
+  multiscale_bins: [8, 32, 128]
+  multiscale_weight: 0.25
+  pearson_weight: 0.5
+
+atac_dropout:
+  enabled: false
+  mask_fraction: 0.00
+  span_length: 32
+  max_spans: 0
+
+metadata:
+  experiment_group: 5.2finetuneidea
+  provenance: scratch LoRA from chromnitron_base.pt only; no warm-start adapter.
+  paper_atac_input: /broad/boxialab/sihengtao/projects/check4hic2_anewPaper/chrom2vec_output/SRR21983447_SRR21983446/s8_normalized/genrich_normalized.zarr
+  paper_target_input: /broad/boxialab/sihengtao/projects/check4hic2_anewPaper/chrom2vec_output/SRR21983756_SRR21983758/s8_normalized/genrich_normalized.zarr
+  bcl11a_pearson_bin_sizes_bp: [50, 100, 200, 1000]

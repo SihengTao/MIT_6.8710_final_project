@@ -1,0 +1,40 @@
+experiment:
+  run_name: hic2_bcl11a_export
+  save_root: /broad/boxialab/sihengtao/projects/chromnitron_finetune
+
+code:
+  atlas_config_path: /broad/boxialab/sihengtao/chromnitron/atlas_tcell_differentiation/chromnitron/examples/local_config.yaml
+
+model:
+  target_cap: HIC2
+  base_model_path: /broad/boxialab/sihengtao/chromnitron/resources/model_weights/chromnitron_base.pt
+  warm_start_lora_path: /broad/boxialab/sihengtao/chromnitron/resources/model_weights/CAPs/HIC2.pt
+  num_genomic_features: 1
+  hidden: 384
+  num_attn_blocks: 16
+  num_of_scale: 4
+  num_targets: 1
+  no_confidence_prediction: false
+  prot_dim: 2560
+  sample_per_chunk: 4
+  confidence_weight: 0.0
+  lora_r: 4
+  trainable_mode: lora
+
+data:
+  manifest_path: ../../manifests/hic2_single_sample.csv
+  assembly: hg38
+  chrom_sizes_path: /broad/boxialab/sihengtao/chromnitron/resources/chr_sizes.bed
+  excluded_region_path: auto
+  val_chrs:
+    - chr10
+  test_chrs:
+    - chr20
+  window_size: 8192
+  chunk_size: 100000
+  sample_per_chunk: 4
+  atac_log1p: true
+  apply_reverse_complement: false
+  apply_gaussian_noise: false
+  cap_embedding_key: embedding
+  verbose: false

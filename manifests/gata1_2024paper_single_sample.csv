@@ -1,0 +1,2 @@
+sample_id,atac_path,target_path
+check4hic2_anewPaper_single_sample,/broad/boxialab/sihengtao/projects/check4hic2_anewPaper/chrom2vec_output/SRR21983447_SRR21983446/s8_normalized/genrich_normalized.zarr,/broad/boxialab/sihengtao/projects/check4hic2_anewPaper/chrom2vec_output/SRR21983756_SRR21983758/s8_normalized/genrich_normalized.zarr

@@ -1,0 +1,39 @@
+# Adapted from gata1_official_bcl11a_1mb for base-only official Chromnitron
+# GATA1-labeled inference on the BCL11A 1Mb window. CAP remains GATA1 for
+# embedding/output labels; use_finetune=disable prevents loading CAPs/GATA1.pt.
+
+model_resource:
+  root: /broad/boxialab/sihengtao/chromnitron/resources/model_weights
+  base_weights: chromnitron_base.pt
+  per_cap_lora_weights: CAPs
+
+input_resource:
+  root: /broad/boxialab/sihengtao/chromnitron/resources/input_resources
+  sequence: DNA_sequence
+  cap: CAP_embeddings
+  atac_root: /broad/boxialab/sihengtao/projects/check4hic2_anewPaper/chrom2vec_output/SRR21983447_SRR21983446/s8_normalized
+  atac: ''
+  atac_pattern: genrich_normalized.zarr
+
+inference_config:
+  input:
+    root: /broad/boxialab/sihengtao/chromnitron/chromnitron_finetune/configs/gata1_base_only_bcl11a_1mb/inputs
+    assembly: hg38
+    excluded_region_path: auto
+    locus_list_path: locus.bed
+    celltype_list_path: celltype.txt
+    cap_list_path: cap.txt
+  inference:
+    enable: true
+    use_finetune: disable
+    batch_size: 32
+    num_workers: 8
+  output:
+    path: /broad/boxialab/sihengtao/projects/chromnitron_finetune/gata1_base_only_bcl11a_1mb
+    skip_if_exists: true
+  post_processing:
+    enable: true
+    valid_margin: 1024
+    store_bigwig: true
+    store_zarr: true
+    peak_calling: true

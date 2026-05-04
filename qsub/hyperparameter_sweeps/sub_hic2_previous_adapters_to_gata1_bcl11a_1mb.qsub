@@ -1,0 +1,113 @@
+#!/bin/bash
+#$ -N hic2_prev_to_GATA1
+#$ -cwd
+#$ -l h_vmem=128G
+#$ -l h_rt=48:00:00
+#$ -l gpu=1
+#$ -l os=RedHat8
+#$ -hard
+#$ -t 1-14
+#$ -tc 5
+#$ -m ea
+#$ -M stao@broadinstitute.org
+
+set -euo pipefail
+
+CODE_DIR="/broad/boxialab/sihengtao/chromnitron/chromnitron_finetune"
+EXPORT_HELPER="${CODE_DIR}/scripts/export_hic2_best_adapter_bigwig_1mb.py"
+CONDA_SH="/broad/software/free/Linux/redhat_7_x86_64/pkgs/anaconda3_2022.10/etc/profile.d/conda.sh"
+CONDA_ENV="/broad/boxialab/sihengtao/env_all/chromnitron_gpu"
+PY="${PY:-${CONDA_ENV}/bin/python3.9}"
+
+LOG_DIR="/broad/boxialab/sihengtao/projects/chromnitron_finetune/logs"
+TASK_ID="${SGE_TASK_ID:-}"
+
+mkdir -p "${LOG_DIR}"
+JOB_TAG="${JOB_ID:-manual}.${TASK_ID:-unset}"
+RUN_LOG="${LOG_DIR}/hic2_previous_adapters_to_gata1.${JOB_TAG}.log"
+exec >"${RUN_LOG}" 2>&1
+
+if [[ ! "${TASK_ID}" =~ ^[0-9]+$ ]] || (( TASK_ID < 1 || TASK_ID > 14 )); then
+  echo "Unsupported SGE_TASK_ID=${TASK_ID:-unset}; expected 1-14" >&2
+  exit 2
+fi
+
+LABELS=(
+  ""
+  "hic2_warmstart_no_atac_dropout"
+  "hic2_warmstart_with_atac_dropout"
+  "hic2_loss_weighted_multiscale_pearsonon_r4_base_5ep"
+  "hic2_loss_weighted_multiscale_pearsonon_r4_fullws_5ep"
+  "hic2_loss_weighted_multiscale_pearsonoff_r4_base_5ep"
+  "hic2_loss_weighted_multiscale_pearsonoff_r4_fullws_5ep"
+  "hic2_loss_mse_pearsonoff_r4_base_5ep"
+  "hic2_loss_mse_pearsonoff_r4_fullws_5ep"
+  "hic2_loss_mse_pearsonoff_r4_fullws_5ep_v2"
+  "hic2_target_A_log1p_clip_mse_r8_base_8ep"
+  "hic2_target_B_clip_mse_r4_base_8ep"
+  "hic2_target_B_clip_mse_r8_base_8ep"
+  "hic2_target_D_gamma2_mse_r4_base_8ep"
+  "hic2_target_D_gamma2_mse_r8_base_8ep"
+)
+
+RUN_DIRS=(
+  ""
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_warmstart_no_atac_dropout/20260329-164943"
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_warmstart_no_atac_dropout/hic2_warmstart_with_atac_dropout/20260328-230921"
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_loss_weighted_multiscale_pearsonon_r4_base_lr3em4_5ep/20260425-184209"
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_loss_weighted_multiscale_pearsonon_r4_fullws_lr3em4_5ep/20260426-020616"
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_loss_weighted_multiscale_pearsonoff_r4_base_lr3em4_5ep/20260425-160431"
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_loss_weighted_multiscale_pearsonoff_r4_fullws_lr3em4_5ep/20260426-020622"
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_loss_mse_pearsonoff_r4_base_lr3em4_5ep/20260425-160431"
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_loss_mse_pearsonoff_r4_fullws_lr3em4_5ep/20260426-020622"
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_loss_mse_pearsonoff_r4_fullws_lr3em4_5ep/20260427-162712"
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_target_A_log1p_clip_mse_r8_base_lr1em3_8ep/20260427-035224"
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_target_B_clip_mse_r4_base_lr3em4_8ep/20260426-145616"
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_target_B_clip_mse_r8_base_lr1em3_8ep/20260427-035224"
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_target_D_gamma2_mse_r4_base_lr3em4_8ep/20260426-145616"
+  "/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_target_D_gamma2_mse_r8_base_lr1em3_8ep/20260427-035224"
+)
+
+LABEL="${LABELS[${TASK_ID}]}"
+RUN_DIR="${RUN_DIRS[${TASK_ID}]}"
+OUTPUT_DIR="${RUN_DIR}/hic2_1mb_bigwig_gata1_transfer_1mb"
+
+CAP="GATA1"
+CELLTYPE="check4hic2_anewPaper_single_sample"
+ASSEMBLY="hg38"
+REGION="chr2:60005424-61005424"
+CONFIG_ROOT="${CODE_DIR}/configs/hic2_bcl11a_export"
+GENE="BCL11A"
+
+cd "${CODE_DIR}"
+
+source "${CONDA_SH}"
+conda activate "${CONDA_ENV}"
+
+export SINGULARITY_BINDPATH=/broad/boxialab/sihengtao:/broad/boxialab/sihengtao
+export PYTHONUNBUFFERED=1
+
+echo "Starting HIC2 previous adapter to GATA1 ${GENE} 1Mb bigWig export"
+echo "  task_id=${TASK_ID}"
+echo "  label=${LABEL}"
+echo "  run_dir=${RUN_DIR}"
+echo "  output_dir=${OUTPUT_DIR}"
+echo "  config_root=${CONFIG_ROOT}"
+echo "  celltype=${CELLTYPE}"
+echo "  cap=${CAP}"
+echo "  assembly=${ASSEMBLY}"
+echo "  region=${REGION}"
+echo "  force=1"
+echo "  provenance=HIC2 finetuned adapter exported with GATA1 CAP/protein; this is not a GATA1 finetune."
+
+"${PY}" "${EXPORT_HELPER}" \
+  --run-dir "${RUN_DIR}" \
+  --config-root "${CONFIG_ROOT}" \
+  --celltype "${CELLTYPE}" \
+  --cap "${CAP}" \
+  --assembly "${ASSEMBLY}" \
+  --region "${REGION}" \
+  --output-dir "${OUTPUT_DIR}" \
+  --force
+
+echo "Finished ${LABEL} to GATA1 ${GENE} 1Mb bigWig export"

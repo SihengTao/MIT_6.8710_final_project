@@ -1,0 +1,67 @@
+#!/bin/bash
+#$ -N five2_ft_scratch
+#$ -cwd
+#$ -l h_vmem=128G
+#$ -l h_rt=48:00:00
+#$ -l gpu=1
+#$ -l os=RedHat8
+#$ -hard
+#$ -t 1-2
+#$ -tc 2
+#$ -m ea
+#$ -M stao@broadinstitute.org
+
+set -euo pipefail
+
+CODE_DIR="/broad/boxialab/sihengtao/chromnitron/chromnitron_finetune"
+RUN_SCRIPT="${CODE_DIR}/run_hic2_finetune.py"
+LOG_DIR="/broad/boxialab/sihengtao/projects/chromnitron_finetune/logs"
+TASK_ID="${SGE_TASK_ID:-}"
+
+if [[ ! "${TASK_ID}" =~ ^[0-9]+$ ]] || (( TASK_ID < 1 || TASK_ID > 2 )); then
+  echo "Unsupported SGE_TASK_ID=${TASK_ID:-unset}; expected 1-2" >&2
+  exit 2
+fi
+
+LABELS=(
+  ""
+  "gata1_from_baseonly_scratch_r4_lr1e4_ep10_2024paper"
+  "hic2_from_baseonly_scratch_r4_lr1e4_ep10_2024paper"
+)
+
+CONFIGS=(
+  ""
+  "${CODE_DIR}/configs/5.2finetuneidea/gata1_scratch_r4_lr1e4_10ep_2024paper.yaml"
+  "${CODE_DIR}/configs/5.2finetuneidea/hic2_scratch_r4_lr1e4_10ep_2024paper.yaml"
+)
+
+LABEL="${LABELS[${TASK_ID}]}"
+CONFIG_PATH="${CONFIGS[${TASK_ID}]}"
+
+mkdir -p "${LOG_DIR}"
+JOB_TAG="${JOB_ID:-manual}.${TASK_ID}"
+RUN_LOG="${LOG_DIR}/five2_ft_scratch.${JOB_TAG}.${LABEL}.log"
+exec >"${RUN_LOG}" 2>&1
+
+CONDA_SH="/broad/software/free/Linux/redhat_7_x86_64/pkgs/anaconda3_2022.10/etc/profile.d/conda.sh"
+CONDA_ENV="/broad/boxialab/sihengtao/env_all/chromnitron_gpu"
+
+cd "${CODE_DIR}"
+
+source "${CONDA_SH}"
+conda activate "${CONDA_ENV}"
+
+export SINGULARITY_BINDPATH=/broad/boxialab/sihengtao:/broad/boxialab/sihengtao
+export PYTHONUNBUFFERED=1
+
+echo "Starting 5.2finetuneidea scratch LoRA finetune"
+echo "  task_id=${TASK_ID}"
+echo "  label=${LABEL}"
+echo "  config=${CONFIG_PATH}"
+echo "  run_script=${RUN_SCRIPT}"
+echo "  conda_env=${CONDA_ENV}"
+echo "  provenance=scratch LoRA from chromnitron_base.pt; warm_start_lora_path is empty"
+
+python "${RUN_SCRIPT}" --config "${CONFIG_PATH}"
+
+echo "Finished 5.2finetuneidea scratch LoRA finetune: ${LABEL}"

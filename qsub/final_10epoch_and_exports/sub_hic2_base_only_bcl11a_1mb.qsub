@@ -1,0 +1,43 @@
+#!/bin/bash
+#$ -N hic2_base_bcl11a
+#$ -cwd
+#$ -l h_vmem=128G
+#$ -l h_rt=72:00:00
+#$ -l gpu=1
+#$ -l os=RedHat8
+#$ -hard
+#$ -m ea
+#$ -M stao@broadinstitute.org
+
+set -euo pipefail
+
+PROJECT_DIR="/broad/boxialab/sihengtao/chromnitron/chromnitron_finetune"
+ATLAS_CHROMNITRON_DIR="/broad/boxialab/sihengtao/chromnitron/atlas_tcell_differentiation/chromnitron"
+CONFIG_PATH="${PROJECT_DIR}/configs/hic2_base_only_bcl11a_1mb/local_config.yaml"
+OUTPUT_DIR="/broad/boxialab/sihengtao/projects/chromnitron_finetune/hic2_base_only_bcl11a_1mb"
+LOG_DIR="${PROJECT_DIR}/logs"
+
+mkdir -p "${LOG_DIR}"
+JOB_TAG="${JOB_ID:-local}"
+exec >"${LOG_DIR}/hic2_base_only_bcl11a_1mb.${JOB_TAG}.log" 2>&1
+
+source /broad/software/free/Linux/redhat_7_x86_64/pkgs/anaconda3_2022.10/etc/profile.d/conda.sh
+conda activate /broad/boxialab/sihengtao/env_all/chromnitron_gpu
+
+export SINGULARITY_BINDPATH=/broad/boxialab/sihengtao:/broad/boxialab/sihengtao
+export PYTHONUNBUFFERED=1
+
+echo "Starting official Chromnitron HIC2 base-only BCL11A 1Mb inference"
+echo "  config=${CONFIG_PATH}"
+echo "  output=${OUTPUT_DIR}"
+echo "  model_root=/broad/boxialab/sihengtao/chromnitron/resources/model_weights"
+echo "  base_model=chromnitron_base.pt"
+echo "  cap_model=disabled by inference.use_finetune=disable"
+echo "  cap_label=HIC2"
+echo "  celltype=check4hic2_anewPaper_single_sample"
+echo "  region=chr2:60005424-61005424"
+
+cd "${ATLAS_CHROMNITRON_DIR}"
+python inference.py "${CONFIG_PATH}"
+
+echo "Finished official Chromnitron HIC2 base-only BCL11A 1Mb inference"

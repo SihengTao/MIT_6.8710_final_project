@@ -1,0 +1,35 @@
+#!/bin/bash
+#$ -N hic2_ft_atac_do
+#$ -cwd
+#$ -l h_vmem=128G
+#$ -l h_rt=96:00:00
+#$ -l gpu=1
+#$ -l os=RedHat8
+#$ -hard
+#$ -m ea
+#$ -M stao@broadinstitute.org
+
+set -euo pipefail
+
+CODE_DIR="/broad/boxialab/sihengtao/chromnitron/chromnitron_finetune"
+RUN_SCRIPT="${RUN_SCRIPT:-${CODE_DIR}/run_hic2_finetune.py}"
+CONFIG_PATH="${CONFIG_PATH:-${CODE_DIR}/configs/hic2_with_atac_dropout.yaml}"
+LOG_DIR="/broad/boxialab/sihengtao/projects/chromnitron_finetune/logs"
+mkdir -p "$LOG_DIR"
+exec >"${LOG_DIR}/hic2_ft_atac_do.${JOB_ID}.log" 2>&1
+
+CONDA_SH="/broad/software/free/Linux/redhat_7_x86_64/pkgs/anaconda3_2022.10/etc/profile.d/conda.sh"
+CONDA_ENV="/broad/boxialab/sihengtao/env_all/chromnitron_gpu"
+
+cd "${CODE_DIR}"
+
+source "${CONDA_SH}"
+conda activate "${CONDA_ENV}"
+
+export SINGULARITY_BINDPATH=/broad/boxialab/sihengtao:/broad/boxialab/sihengtao
+export PYTHONUNBUFFERED=1
+export NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
+
+torchrun --standalone --nproc_per_node="${NPROC_PER_NODE}" \
+  "${RUN_SCRIPT}" \
+  "${CONFIG_PATH}"
