@@ -2,7 +2,7 @@
 
 This repository contains the code used for the final report, **Improving Chromnitron Predictions in Unseen Erythroid Cell Types with Target-Specific Fine-Tuning**.
 
-The repository is organized by the modules that appear in the paper. Broad/server paths are intentionally preserved in configs, qsub files, manifests, and source tables so that the submitted code maps back to the actual runs. Large data and generated artifacts are excluded: bigWig tracks, zarr stores, checkpoints, BAM/FASTQ files, figures, PDFs, DOCX files, and cluster logs are not committed.
+The repository is organized by the modules that appear in the paper. Broad/server paths are intentionally preserved in configs, manifests, and source tables so that the submitted code maps back to the actual runs. Large data and generated artifacts are excluded: bigWig tracks, zarr stores, checkpoints, BAM/FASTQ files, figures, PDFs, DOCX files, cluster logs, and qsub launch scripts are not committed.
 
 ## Repository Layout
 
@@ -22,7 +22,6 @@ configs/
   final_10epoch/                    # final GATA1/HIC2 10-epoch fine-tune configs
   prediction_export/                # 1 Mb prediction/export configs
 
-qsub/                               # Broad cluster launch scripts
 manifests/                          # sample manifests used by fine-tuning
 data/                               # small source TSV/CSV tables used by evaluation/figures
 docs/method_notes/                  # project notes that document run choices
@@ -67,7 +66,7 @@ The code was written for the original Broad/local environment. The configs prese
 - CAP protein embeddings
 - Broad project output directories
 
-To rerun from a different environment, update those paths in `configs/`, `manifests/`, and `qsub/`. The scripts under `src/` were lightly adjusted so that imports work from this GitHub layout, but the scientific paths and run labels were not rewritten.
+To rerun from a different environment, update those paths in `configs/` and `manifests/`. The scripts under `src/` were lightly adjusted so that imports work from this GitHub layout, but the scientific paths and run labels were not rewritten.
 
 ## Paper-to-Code Map
 

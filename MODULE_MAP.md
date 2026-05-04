@@ -75,8 +75,6 @@ Relevant files:
 
 - `configs/atac_dropout/hic2_no_atac_dropout.yaml`
 - `configs/atac_dropout/hic2_with_atac_dropout.yaml`
-- `qsub/atac_dropout/sub_hic2_finetune_no_atac_dropout.qsub`
-- `qsub/atac_dropout/sub_hic2_finetune_with_atac_dropout.qsub`
 - `data/atac_dropout/figure3_atac_dropout_ablation_source.tsv`
 - `data/atac_dropout/figure3_atac_dropout_ablation_clean_source.tsv`
 - `data/atac_dropout/source_manifest.tsv`
@@ -109,7 +107,6 @@ Relevant files:
 - `configs/hyperparameter_sweep/generated_hic2_loss_trials/`
 - `configs/hyperparameter_sweep/generated_hic2_loss_compare_3task/`
 - `configs/hyperparameter_sweep/generated_hic2_target_transform_abd_8ep/`
-- `qsub/hyperparameter_sweeps/`
 - `data/hyperparameter_sweep/figure4_candidate_mapping.tsv`
 - `data/hyperparameter_sweep/figure4_finetuning_hyperparameter_selection_source.tsv`
 - `data/hyperparameter_sweep/figure4_finetuning_hyperparameter_selection_clean_source.tsv`
@@ -126,10 +123,6 @@ Relevant files:
 
 - `configs/final_10epoch/gata1_scratch_r4_lr1e4_10ep_2024paper.yaml`
 - `configs/final_10epoch/hic2_scratch_r4_lr1e4_10ep_2024paper.yaml`
-- `qsub/final_10epoch_and_exports/sub_5.2finetuneidea_scratch_lora_2024paper.qsub`
-- `qsub/final_10epoch_and_exports/sub_5.2finetuneidea_bcl11a_pearson_2024paper.qsub`
-- `qsub/final_10epoch_and_exports/sub_5.2_direct_scratch_export_bcl11a_1mb.qsub`
-- `qsub/final_10epoch_and_exports/sub_5.2_direct_scratch_export_chr20_asxl1_1mb.qsub`
 - `data/hyperparameter_sweep/loss_trajectories_10epoch_source.tsv`
 - `data/hyperparameter_sweep/loss_trajectories_source_manifest.tsv`
 - `src/06_figure_generation/make_loss_trajectories_10epoch.py`
@@ -151,11 +144,6 @@ Relevant files:
 - `configs/prediction_export/gata1_base_only_bcl11a_1mb/`
 - `configs/prediction_export/gata1_base_only_chr20_asxl1_1mb/`
 - `configs/prediction_export/gata1_official_bcl11a_1mb/`
-- `qsub/final_10epoch_and_exports/sub_hic2_export_bcl11a_1mb_selected.qsub`
-- `qsub/final_10epoch_and_exports/sub_hic2_export_recent3_8ep_chr20_asxl1_1mb.qsub`
-- `qsub/final_10epoch_and_exports/sub_gata1_base_only_bcl11a_1mb.qsub`
-- `qsub/final_10epoch_and_exports/sub_gata1_official_bcl11a_1mb.qsub`
-- `qsub/final_10epoch_and_exports/sub_hic2_base_only_bcl11a_1mb.qsub`
 
 ## 10. Evaluation and Track Metrics
 

@@ -40,5 +40,6 @@ __pycache__/
 *.synctex.gz
 
 # Cluster output
+qsub/
 *.o[0-9]*
 *.e[0-9]*
